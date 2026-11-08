@@ -1,0 +1,24 @@
+# Local PostgreSQL for personal testing. Matches the version CI uses.
+#   docker compose up -d        start (loads db/ddl.sql on first start only)
+#   docker compose down -v      stop and wipe the data, so ddl.sql reloads next start
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tally
+      POSTGRES_PASSWORD: tally   # local only; never reuse for Supabase
+      POSTGRES_DB: tally
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/ddl.sql:/docker-entrypoint-initdb.d/01-ddl.sql:ro
+      - ./db/tests:/tests:ro
+      - tally-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tally -d tally"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  tally-data:

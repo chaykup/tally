@@ -1,0 +1,45 @@
+name: Database tests
+
+# Runs on every pull request into main (so a failing schema blocks the merge),
+# and again on main after each merge.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  db-tests:
+    name: db-tests   # this name is what you select as the required status check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tally
+          POSTGRES_PASSWORD: tally
+          POSTGRES_DB: tally
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tally -d tally"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: tally
+      PGPASSWORD: tally
+      PGDATABASE: tally
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build schema from db/ddl.sql
+        run: psql -v ON_ERROR_STOP=1 -f db/ddl.sql
+
+      - name: Run constraint tests
+        run: psql -v ON_ERROR_STOP=1 -f db/tests/constraints_test.sql
