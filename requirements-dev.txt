@@ -1,0 +1,3 @@
+# Test tools, installed in every service image and in CI.
+pytest==9.2.0
+httpx2==2.16.0

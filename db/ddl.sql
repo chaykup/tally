@@ -16,7 +16,7 @@
 -- environment, create one login per service and add it to its group, for example:
 --   CREATE ROLE tally_auth      LOGIN PASSWORD '<secret>' IN ROLE auth_service;
 --   CREATE ROLE tally_inventory LOGIN PASSWORD '<secret>' IN ROLE inventory_service;
---   CREATE ROLE tally_sales     LOGIN PASSWORD '<secret>' IN ROLE sales_service;
+--   CREATE ROLE tally_transactions LOGIN PASSWORD '<secret>' IN ROLE sales_service;
 --   CREATE ROLE tally_analytics LOGIN PASSWORD '<secret>' IN ROLE analytics_reader;
 -- Application code should schema-qualify names (inventory.stock, sales.orders, ...).
 --

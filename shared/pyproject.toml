@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tally-common"
+version = "0.1.0"
+description = "Code shared by every Tally service: settings, database sessions, JWT auth, change labels."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.163",
+    "sqlalchemy>=2.1",
+    "psycopg[binary]>=3.3",
+    "pydantic-settings>=2.16",
+    "PyJWT>=2.15",
+]
+
+[tool.setuptools]
+packages = ["tally_common"]
