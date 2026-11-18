@@ -41,6 +41,17 @@ UPDATE inventory.stock SET quantity = quantity - 5 WHERE item_id = 1 AND warehou
 INSERT INTO sales.order_lines (order_id, item_id, warehouse_id, quantity, unit_price) VALUES (1, 1, 1, 5, 9.99);
 UPDATE sales.orders SET status = 'confirmed' WHERE order_id = 1;
 
+-- A second order that went all the way to an invoice, which is now 10 days overdue.
+INSERT INTO sales.orders (order_id, customer_id, created_by, delivery_address)
+    VALUES (2, 1, 2, '1 Acme Way, Los Angeles, CA');
+SELECT set_config('tally.order_id', '2', true);
+UPDATE inventory.stock SET quantity = quantity - 3 WHERE item_id = 1 AND warehouse_id = 2;
+INSERT INTO sales.order_lines (order_id, item_id, warehouse_id, quantity, unit_price) VALUES (2, 1, 2, 3, 9.99);
+UPDATE sales.orders SET status = 'confirmed' WHERE order_id = 2;
+UPDATE sales.orders SET status = 'invoiced'  WHERE order_id = 2;
+INSERT INTO sales.invoices (order_id, invoice_number, due_date, amount)
+    VALUES (2, 'INV-0001', current_date - 10, 29.97);
+
 -- Seed rows used explicit ids; move the identity counters past them.
 SELECT setval(pg_get_serial_sequence('accounts.users',       'user_id'),      100);
 SELECT setval(pg_get_serial_sequence('inventory.products',   'item_id'),      100);
