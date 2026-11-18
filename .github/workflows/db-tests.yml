@@ -43,3 +43,9 @@ jobs:
 
       - name: Run constraint tests
         run: psql -v ON_ERROR_STOP=1 -f db/tests/constraints_test.sql
+
+      - name: Run privilege tests
+        run: psql -v ON_ERROR_STOP=1 -f db/tests/privileges_test.sql
+
+      - name: Run analytics view tests
+        run: psql -v ON_ERROR_STOP=1 -f db/tests/analytics_test.sql
