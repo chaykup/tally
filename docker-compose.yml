@@ -1,6 +1,8 @@
 # Local PostgreSQL for personal testing. Matches the version CI uses.
 #   docker compose up -d        start (loads db/ddl.sql on first start only)
 #   docker compose down -v      stop and wipe the data, so ddl.sql reloads next start
+#   run the tests (same as CI):
+#     docker compose exec db sh -c 'for f in constraints privileges analytics; do psql -U tally -d tally -v ON_ERROR_STOP=1 -f /tests/${f}_test.sql || exit 1; done'
 services:
   db:
     image: postgres:17
