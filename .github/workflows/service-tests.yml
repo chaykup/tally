@@ -1,0 +1,69 @@
+name: Service tests
+
+# Runs each service's pytest suite against a real Postgres loaded the same way as local
+# Docker (schema, per-service logins, seed data), with each service using its own login.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  service-tests:
+    name: service-tests (${{ matrix.service }})   # select these as required status checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { service: shared,       dir: shared,                login: tally_auth }
+          - { service: auth,         dir: services/auth,         login: tally_auth }
+          - { service: inventory,    dir: services/inventory,    login: tally_inventory }
+          - { service: transactions, dir: services/transactions, login: tally_transactions }
+          - { service: analytics,    dir: services/analytics,    login: tally_analytics }
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tally
+          POSTGRES_PASSWORD: tally
+          POSTGRES_DB: tally
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tally -d tally"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      PGHOST: localhost
+      PGUSER: tally
+      PGPASSWORD: tally
+      PGDATABASE: tally
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Load schema, dev logins and seed data
+        run: |
+          for f in db/ddl.sql db/local/dev_logins.sql db/local/seed.sql; do
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Install
+        run: |
+          pip install -r requirements-dev.txt -e shared
+          if [ -f "${{ matrix.dir }}/requirements.txt" ]; then pip install -r "${{ matrix.dir }}/requirements.txt"; fi
+
+      - name: Test
+        working-directory: ${{ matrix.dir }}
+        env:
+          DATABASE_URL: postgresql://${{ matrix.login }}:tally@localhost:5432/tally
+          JWT_SECRET: ci-only-jwt-secret-for-tests-0123456789
+        run: pytest -v
