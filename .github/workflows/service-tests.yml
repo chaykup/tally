@@ -55,6 +55,12 @@ jobs:
           for f in db/ddl.sql db/local/dev_logins.sql db/local/seed.sql; do
             psql -v ON_ERROR_STOP=1 -q -f "$f"
           done
+          if [ "${{ matrix.service }}" = "auth" ]; then
+            createdb tally_auth_test
+            for f in db/ddl.sql db/local/seed.sql; do
+              psql -d tally_auth_test -v ON_ERROR_STOP=1 -q -f "$f"
+            done
+          fi
 
       - name: Install
         run: |
@@ -65,5 +71,6 @@ jobs:
         working-directory: ${{ matrix.dir }}
         env:
           DATABASE_URL: postgresql://${{ matrix.login }}:tally@localhost:5432/tally
+          TEST_DATABASE_URL: postgresql://${{ matrix.login }}:tally@localhost:5432/tally_auth_test
           JWT_SECRET: ci-only-jwt-secret-for-tests-0123456789
         run: pytest -v
