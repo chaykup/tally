@@ -10,7 +10,7 @@ everyone develops and tests locally in Docker.
 db/
   ddl.sql               the whole schema: tables, triggers, analytics views, role grants
   tests/                SQL tests for constraints, privileges, analytics views
-  local/                Docker-only: dev logins and seed data (never run on Supabase)
+  local/                Docker-only: dev logins, seed data, dashboard demo data (never run on Supabase)
   run-tests.sh          runs db/tests in a scratch database
 shared/                 tally_common: settings, DB sessions, JWT auth, change labels
 services/

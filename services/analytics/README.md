@@ -62,8 +62,20 @@ unmodified seed data. If you've added your own data, reset with
 
 Use Tableau's PostgreSQL connector and choose tables from the `analytics` schema.
 
-- Local: `localhost:5432`, database `tally`, user `tally_analytics`, password `tally`.
+- Local: `localhost:5432`, database `tally_demo`, user `tally_analytics`, password `tally`.
 - Supabase: the `tally_analytics` login and the pooler host, with SSL required.
+
+The `tally` database only holds the small test seed, so build dashboards against
+`tally_demo`: about six months of orders, restocks, cancellations and invoices ending on
+the day it is loaded. Create it, or rebuild it from scratch, with:
+
+```sh
+docker compose exec db sh /db/local/load-demo.sh
+```
+
+It never touches the `tally` database, so the tests are unaffected. See the top of
+`db/local/demo_data.sql` for what the data contains. Reload it now and then so the
+latest days stay current.
 
 Good data sources:
 - **Sales:** `order_line_facts`, one row per line with every dimension already joined in.
