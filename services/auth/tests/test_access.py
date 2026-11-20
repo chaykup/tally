@@ -17,7 +17,12 @@ def test_every_auth_and_user_route_is_covered(client):
     }
     assert routes == {
         (method.lower(), path) for method, path in PROTECTED_ROUTES
-    } | {("get", "/health"), ("post", "/api/v1/auth/login"), ("post", "/api/v1/auth/register")}
+    } | {
+        ("get", "/health"),
+        ("post", "/api/v1/auth/login"),
+        ("post", "/api/v1/auth/register"),
+        ("post", "/api/v1/auth/refresh"),
+    }
 
 
 @pytest.mark.parametrize("method,path", PROTECTED_ROUTES)
