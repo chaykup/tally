@@ -51,5 +51,13 @@ class TokenResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
 
 
+class LoginResponse(TokenResponse):
+    refresh_token: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class MessageResponse(BaseModel):
     message: str

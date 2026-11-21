@@ -13,7 +13,8 @@ Only this service can read password hashes or change users. Other services can r
 
 | Endpoint | Access | Purpose |
 |---|---|---|
-| `POST /api/v1/auth/login` | Public | Verify email and password, then issue an access token |
+| `POST /api/v1/auth/login` | Public | Verify email and password, then issue access and refresh tokens |
+| `POST /api/v1/auth/refresh` | Refresh token | Issue an access token using the account's current role |
 | `POST /api/v1/auth/register` | Public | Create a customer login |
 | `GET /api/v1/auth/me` | Signed in | Read the current account's ID, email and database role |
 | `PATCH /api/v1/auth/password` | Signed in | Verify the current password and set a new one |
@@ -55,8 +56,13 @@ a token and 403 for sales or customer tokens.
 Role checks across services use the role in the token, following the shared security
 module. Existing tokens retain their permissions until expiry, including after an
 admin is demoted. Newly issued tokens use the new database role. Password changes also
-leave existing tokens valid until expiry. `/auth/me` reads the current database role,
+leave existing access tokens valid until expiry. `/auth/me` reads the current database role,
 which can differ from the role in an older token.
+
+Refresh tokens expire seven days after login. Send the refresh token in the JSON body
+of `POST /api/v1/auth/refresh`. A successful request returns a new access token. The same
+refresh token can be reused until it expires or the account password changes. A rejected
+refresh token returns 401. Use access tokens in the `Authorization` header for protected routes.
 
 ## Setup
 
@@ -147,11 +153,17 @@ curl -sS "$AUTH_BASE_URL/auth/register" \
   -H 'Content-Type: application/json' \
   -d '{"email":"person@example.com","password":"local-customer-password-123"}'
 
-# Admin login. Extract its token for the admin requests below.
-AUTH_ADMIN_TOKEN=$(curl -fsS "$AUTH_BASE_URL/auth/login" \
+# Admin login. Extract its tokens for the requests below.
+AUTH_LOGIN=$(curl -fsS "$AUTH_BASE_URL/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@tally.test","password":"password"}' \
+  -d '{"email":"admin@tally.test","password":"password"}')
+AUTH_ADMIN_TOKEN=$(printf '%s' "$AUTH_LOGIN" \
   | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')
+
+# Refresh the access token when it expires.
+printf '%s' "$AUTH_LOGIN" \
+  | python3 -c 'import json, sys; print(json.dumps({"refresh_token": json.load(sys.stdin)["refresh_token"]}))' \
+  | curl -fsS "$AUTH_BASE_URL/auth/refresh" -H 'Content-Type: application/json' --data-binary @-
 
 # Current account
 curl -sS "$AUTH_BASE_URL/auth/me" -H "Authorization: Bearer $AUTH_ADMIN_TOKEN"
