@@ -2,9 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Customer, Order, OrderLine
-from app.order_schemas import OrderResponse, OrderCreate
-
+from app.models import Customer, Order, OrderLine, OrderStatus
+from app.order_schemas import OrderResponse, OrderCreate, OrderStatusUpdate
 from tally_common.db import get_session
 from tally_common.security import CurrentUser, require_roles
 from tally_common.audit import set_change_context
@@ -210,6 +209,179 @@ def create_order(
     query = (
         select(Order)
         .where(Order.order_id == new_order_id)
+        .options(selectinload(Order.lines))
+    )
+
+    return session.scalar(query)
+
+@router.patch(
+    "/{order_id}/status",
+    response_model=OrderResponse,
+    responses={
+        403: {"description": "Forbidden"},
+        404: {"description": "Order not found"},
+        409: {"description": "Invalid status transition"},
+    },
+)
+def update_order_status(
+    order_id: int,
+    data: OrderStatusUpdate,
+    user: CurrentUser = Depends(
+        require_roles("admin", "sales")
+    ),
+    session: Session = Depends(get_session),
+):
+    with session.begin():
+
+        # 1. Retrieve and lock the order.
+        query = (
+            scoped_orders(user)
+            .where(Order.order_id == order_id)
+            .with_for_update(of=Order)
+        )
+
+        order = session.scalar(query)
+
+        if order is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Order not found",
+            )
+
+        # 2. Only pending orders can be confirmed.
+        if order.status != OrderStatus.pending:
+            raise HTTPException(
+                status_code=409,
+                detail="Only pending orders can be confirmed",
+            )
+
+        # 3. Record the user performing the change.
+        set_change_context(
+            session,
+            user_id=user.user_id,
+        )
+
+        # 4. Update the order status.
+        order.status = OrderStatus(data.status)
+
+        session.flush()
+
+    # 5. The transaction has committed.
+    # Retrieve the order and its related lines.
+    query = (
+        select(Order)
+        .where(Order.order_id == order_id)
+        .options(selectinload(Order.lines))
+    )
+
+    return session.scalar(query)
+
+@router.post(
+    "/{order_id}/cancel",
+    response_model=OrderResponse,
+    responses={
+        404: {"description": "Order not found"},
+        409: {"description": "Order cannot be cancelled"},
+    },
+)
+def cancel_order(
+    order_id: int,
+    user: CurrentUser = Depends(
+        require_roles("admin", "sales")
+    ),
+    session: Session = Depends(get_session),
+):
+    with session.begin():
+
+        # 1. Lock the order and load its line items.
+        query = (
+            scoped_orders(user)
+            .where(Order.order_id == order_id)
+            .options(selectinload(Order.lines))
+            .with_for_update(of=Order)
+        )
+
+        order = session.scalar(query)
+
+        if order is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Order not found",
+            )
+
+        # 2. Validate the current status.
+        if order.status not in (
+            OrderStatus.pending,
+            OrderStatus.confirmed,
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Order cannot be cancelled",
+            )
+
+        # 3. Lock inventory rows in a consistent order.
+        lines = sorted(
+            order.lines,
+            key=lambda line: (
+                line.item_id,
+                line.warehouse_id,
+            ),
+        )
+
+        for line in lines:
+            stock = session.execute(
+                text("""
+                    SELECT quantity
+                    FROM inventory.stock
+                    WHERE item_id = :item_id
+                      AND warehouse_id = :warehouse_id
+                    FOR UPDATE
+                """),
+                {
+                    "item_id": line.item_id,
+                    "warehouse_id": line.warehouse_id,
+                },
+            ).first()
+
+            if stock is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Order stock record not found",
+                )
+
+        # 4. Set audit information for PostgreSQL triggers.
+        set_change_context(
+            session,
+            user_id=user.user_id,
+            movement_reason="sale_cancelled",
+            order_id=order.order_id,
+        )
+
+        # 5. Restore purchased quantities.
+        for line in lines:
+            session.execute(
+                text("""
+                    UPDATE inventory.stock
+                    SET quantity = quantity + :quantity
+                    WHERE item_id = :item_id
+                      AND warehouse_id = :warehouse_id
+                """),
+                {
+                    "quantity": line.quantity,
+                    "item_id": line.item_id,
+                    "warehouse_id": line.warehouse_id,
+                },
+            )
+
+        # 6. Update the order status.
+        order.status = OrderStatus.cancelled
+
+        session.flush()
+
+    # 7. Return the updated order after committing.
+    query = (
+        select(Order)
+        .where(Order.order_id == order_id)
         .options(selectinload(Order.lines))
     )
 

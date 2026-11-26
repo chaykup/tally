@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import OrderStatus
@@ -46,3 +46,6 @@ class OrderResponse(BaseModel):
     lines: list[OrderLineResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+class OrderStatusUpdate(BaseModel):
+    status: Literal["confirmed"]
