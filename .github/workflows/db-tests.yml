@@ -38,8 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build schema from db/ddl.sql
-        run: psql -v ON_ERROR_STOP=1 -f db/ddl.sql
-
-      - name: Run constraint tests
-        run: psql -v ON_ERROR_STOP=1 -f db/tests/constraints_test.sql
+      # Same script developers run locally: builds ddl.sql in a scratch database and runs
+      # every db/tests/*_test.sql file, so new test files are picked up automatically.
+      - name: Run database tests
+        run: sh db/run-tests.sh

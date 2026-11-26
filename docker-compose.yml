@@ -1,6 +1,22 @@
-# Local PostgreSQL for personal testing. Matches the version CI uses.
-#   docker compose up -d        start (loads db/ddl.sql on first start only)
-#   docker compose down -v      stop and wipe the data, so ddl.sql reloads next start
+# Local development stack: Postgres 17 (same as CI) plus all four services.
+#
+#   docker compose up -d --build        start everything (first start loads schema + seed data)
+#   docker compose up -d --build auth   start just the db and one service
+#   docker compose logs -f inventory    follow one service's logs
+#   docker compose down -v              stop and wipe the database, so it reloads next start
+#
+#   docker compose exec db sh /db/run-tests.sh   database tests (same as CI)
+#   docker compose exec auth pytest              one service's tests (same as CI)
+#
+# Code under services/<name>/ and shared/ is mounted into the containers and reloads on save.
+# Rebuild (--build) after changing a requirements.txt.
+
+x-service: &service
+  depends_on:
+    db:
+      condition: service_healthy
+  command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
 services:
   db:
     image: postgres:17
@@ -11,14 +27,61 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      # Runs in name order on the first start of an empty volume only.
       - ./db/ddl.sql:/docker-entrypoint-initdb.d/01-ddl.sql:ro
-      - ./db/tests:/tests:ro
+      - ./db/local/dev_logins.sql:/docker-entrypoint-initdb.d/02-dev_logins.sql:ro
+      - ./db/local/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
+      - ./db:/db:ro
       - tally-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tally -d tally"]
       interval: 2s
       timeout: 5s
       retries: 15
+
+  auth:
+    <<: *service
+    build: { context: ., dockerfile: services/auth/Dockerfile }
+    ports: ["8001:8000"]
+    environment:
+      DATABASE_URL: postgresql://tally_auth:tally@db:5432/tally
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-jwt-secret-not-for-production}
+    volumes:
+      - ./shared:/shared
+      - ./services/auth:/app
+
+  inventory:
+    <<: *service
+    build: { context: ., dockerfile: services/inventory/Dockerfile }
+    ports: ["8002:8000"]
+    environment:
+      DATABASE_URL: postgresql://tally_inventory:tally@db:5432/tally
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-jwt-secret-not-for-production}
+    volumes:
+      - ./shared:/shared
+      - ./services/inventory:/app
+
+  transactions:
+    <<: *service
+    build: { context: ., dockerfile: services/transactions/Dockerfile }
+    ports: ["8003:8000"]
+    environment:
+      DATABASE_URL: postgresql://tally_transactions:tally@db:5432/tally
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-jwt-secret-not-for-production}
+    volumes:
+      - ./shared:/shared
+      - ./services/transactions:/app
+
+  analytics:
+    <<: *service
+    build: { context: ., dockerfile: services/analytics/Dockerfile }
+    ports: ["8004:8000"]
+    environment:
+      DATABASE_URL: postgresql://tally_analytics:tally@db:5432/tally
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-jwt-secret-not-for-production}
+    volumes:
+      - ./shared:/shared
+      - ./services/analytics:/app
 
 volumes:
   tally-data:
